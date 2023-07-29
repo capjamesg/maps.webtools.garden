@@ -39,20 +39,15 @@
         // Now all the functions documented below are available, for example:
         $mf = Mf2\fetch($URL);
 
-        function recursivelyGetHReview ($mf2) {
+        function recursivelyGetObject ($mf2, $name) {
+          // recursively traverse until we find the object we're looking for, then save to list
           $hreviews = [];
-          if (isset($mf2['type']) && in_array('h-review', $mf2['type'])) {
-            return [$mf2];
-          }
-          foreach ($mf2['items'] as $microformat) {
-            if (in_array('h-review', $microformat['type'])) {
+          foreach ($mf2 as $microformat) {
+            if (in_array($name, $microformat['type'])) {
               array_push($hreviews, $microformat);
-            } else {
-              if (isset($microformat["children"])) {
-                foreach ($microformat["children"] as $child) {
-                  $hreviews = array_merge($hreviews, recursivelyGetHReview($child));
-                }
-              }
+            }
+            if (isset($microformat["children"])) {
+              $hreviews = array_merge($hreviews, recursivelyGetObject($microformat["children"], $name));
             }
           }
           return $hreviews;
@@ -92,10 +87,42 @@
           return $categories;
         }
 
-        $hreviews = recursivelyGetHReview($mf);
+
+
+        $hreviews = recursivelyGetObject($mf['items'], "h-review");
+        $hreviewAggregate = recursivelyGetObject($mf['items'], "h-review-aggregate");
         $lat_longs = getLatLongs($hreviews);
         $categories = getCategories($hreviews);
         $first_lat_long_in_each_category = [];
+
+        foreach ($hreviewAggregate as $review) {
+          $review = $review['properties'];
+
+          echo '<section class="aggregate-review"><h1 class="p-name">' . $review['item'][0] . '</h1>';
+
+          $stars = [];
+
+          if (!isset($review['best'])) {
+            $pBest = 5;
+            array_push($unspecified_properties, 'best');
+          } else {
+            $pBest = $review['best'][0];
+          }
+
+          if (!isset($review['average'])) {
+            $pAverage = 1;
+            array_push($unspecified_properties, 'worst');
+          } else {
+            $pAverage = $review['average'][0];
+          }
+
+          for ($i = 0; $i < $pAverage; $i++) {
+            array_push($stars, '⭐️');
+          }
+
+          echo '<p class="p-rating">Average: ' . implode($stars) . ' out of ' . $pBest . '</p>';
+          echo '</section>';
+        }
 
         foreach ($categories as $category) {
           foreach ($hreviews as $review) {
@@ -170,7 +197,7 @@
         }
 
         if (is_array($mf)) {
-          foreach (recursivelyGetHReview($mf) as $microformat) {
+          foreach (recursivelyGetObject($mf['items'], "h-review") as $microformat) {
             $unspecified_properties = [];
             $review = $microformat['properties'];
             if (count($review) === 0) {
@@ -207,7 +234,7 @@
                   array_push($stars, '⭐️');
                 }
                 echo '<p class="p-rating">' . implode($stars) . ' out of ' . $pBest . '</p>';
-                if (isset($pWorst)) {
+                if (isset($review["content"])) {
                   echo '<p class="e-content">' . getValue($review['content'][0]["html"]) . '</p>';
                 }
               }
